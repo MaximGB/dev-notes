@@ -1,0 +1,197 @@
+#+TITLE: Литературное программирование в Clojure с помощью Emacs/org/babel/cider
+#+LANGUAGE: russian
+#+PROPERTY: header-args :export code
+
+* Содержание                                             :noexport:TOC_4_org:
+ - [[Совместимые версии org-mode/babel, cider/lein nrepl middleware][Совместимые версии org-mode/babel, cider/lein nrepl middleware]]
+ - [[Настройка][Настройка]]
+   - [[org-mode/babel][org-mode/babel]]
+     - [[Базовые настройки][Базовые настройки]]
+     - [[Поддержка Clojure][Поддержка Clojure]]
+     - [[Экспорт (для ubuntu/texlive)][Экспорт (для ubuntu/texlive)]]
+   - [[Cider][Cider]]
+   - [[Leiningen][Leiningen]]
+ - [[Дополнительные нюансы][Дополнительные нюансы]]
+
+* Совместимые версии org-mode/babel, cider/lein nrepl middleware
+
+  Не всегда cider работает правильно с org/babel, не релиз версии cider часто не совместимы с текущей версией
+  org/babel, ниже даны версии ПО которые работают на моей машине
+
+  Работающие версии ПО:
+
+  - org-mode/babel 20160125
+  - cider/lein nrepl middleware 0.10.0
+
+* Настройка
+
+** org-mode/babel
+
+*** Базовые настройки
+
+    Следующие настройки, на мой взгляд, делают работу более удобной, их надо поместить в ~/.emacs
+
+     - Размер отступа внутри блока с кодом
+
+       #+BEGIN_SRC emacs-lisp
+         (setq-default org-edit-src-content-indentation 2)
+       #+END_SRC
+
+     - TAB внутри блока кода будет работать также как если бы он работал в основном режиме для
+       языка программирования блока
+
+       #+BEGIN_SRC emacs-lisp
+         (setq-default org-src-tab-acts-natively t)
+       #+END_SRC
+
+     - Раскрашивать код внутри блока кода
+
+       #+BEGIN_SRC emacs-lisp
+         (setq-default org-src-fontify-natively t)
+       #+END_SRC
+
+     - Не спрашивать каждый подтверждения при выполнении блока кода
+
+       #+BEGIN_SRC emacs-lisp
+         (setq-default org-confirm-babel-evaluate nil)
+       #+END_SRC
+
+*** Поддержка Clojure
+
+     Загружаем поддержку Clojure для babel и настраиваем его использовать cider для исполнения кода
+     из блоков кода Сlojure.
+
+     #+BEGIN_SRC emacs-lisp
+       (require 'ob-clojure)
+       (setq-default org-babel-clojure-backend 'cider)
+     #+END_SRC
+
+     В принципе, установка org-babel-clojure-backend не обязательна если cider подключен раньше org-mode в ~/.emacs
+
+*** Экспорт (для ubuntu/texlive)
+
+     Настройка экспорта в babel гораздо более комплексная. Экспорт проходит в 2 этапа, сначала в *.tex файл,
+     а потом из *.tex в *.pdf с помощью pdflatex. Основные проблемы возникают на втором этапе, часто pdflatex
+     не может обработать LaTeX-файл полученный на первом этапе, так как он содержит ошибки - не подключены какие-то
+     LaTeX-пакеты, неправильно указана кодировка, и т.п. Во время экспорта в дирректории с *.org файлом создаётся
+     *.log файл с журналом процесса экспорта. Если экспорт не работает, то разбираться надо начиная с файла журнала,
+     ищем сообщения об ошибках или предупреждения, и исправляем одно за одним ;). Если экспорт проходит успешно,
+     то файл журнала удаляется автоматически.
+
+     Ниже приведён более или менее рабочий вариант с приемлемой поддержкой русского языка и расцветкой блоков кода.
+
+     Без пакета ox-latex переменные org-latex* недоступны, так что запрашиваем пакет
+
+     #+BEGIN_SRC emacs-lisp
+       (require 'ox-latex)
+     #+END_SRC
+
+     Для поддержки русского сначала необходимо настроить список соответствий входных кодировок Emacs и LaTeX,
+     так чтобы LaTeX-файл содержал инструкцию ~\usepackage[utf8x]{inputenc}~.
+
+     #+BEGIN_SRC emacs-lisp
+       (add-to-list 'org-latex-inputenc-alist '("utf8" . "utf8x"))
+     #+END_SRC
+
+     Также выходной LaTeX-файл должен включать пакет cmap и babel (с опциями english,russian). Мы настраиваем
+     список org-latex-packages-alist, который используется для указания пакетов включаемых в каждый LaTeX
+     файл. Формат элемента списка ("options" "package" SNIPPET-FLAG), флаг нужен чтобы указать что пакет
+     также необходим для преобразования LaTeX-фрагментов (snippet) в изображения для включения в не LaTeX-файлы,
+     в web-страницы, например. Я не очень понимаю какие LaTeX-пакеты для этого нужны, поэтому всегда указываю ~t~.
+
+     #+BEGIN_SRC emacs-lisp
+       (add-to-list 'org-latex-packages-alist '("" "cmap" t))
+       (add-to-list 'org-latex-packages-alist '("english,russian" "babel" t))
+     #+END_SRC
+
+     Дальше идёт настройка подсветки синтаксиса при экспорте. org-latex поддерживает два способа:
+     - с использованием LaTeX-пакета listings (требует также пакет color)
+     - c использованием LaTeX-пакета minted (требует внешней утилиты python pygments)
+
+     Поддержка Clojure в пакете listings рудиментарная, однако не требует установки дополнительных программ кроме
+     LaTeX и соответствующих пакетов. Метод minted даёт более красочные результаты, однако требует установки внешней
+     утилиты python pygments.
+
+     Настройка listings
+
+     #+BEGIN_SRC emacs-lisp
+       (setq-default org-latex-listings t)
+       (add-to-list 'org-latex-packages-alist '("" "listings" t))
+       (add-to-list 'org-latex-packages-alist '("" "color" t))
+     #+END_SRC
+
+     Настройка minted
+
+     #+BEGIN_SRC emacs-lisp
+       (setq-default org-latex-listings 'minted)
+       (add-to-list 'org-latex-packages-alist '("" "minted"))
+       (setq-default org-latex-pdf-process '("pdflatex -shell-escape -interaction nonstopmode -output-directory %o %f" "pdflatex -shell-escape -interaction nonstopmode -output-directory %o %f" "pdflatex -shell-escape -interaction nonstopmode -output-directory %o %f"))
+     #+END_SRC
+
+     Так как LaTeX-пакет minted использует стороннюю программу python pygments для формирования HTML-кода с расцветкой,
+     то LaTeX-файл будет включать инструкции ~\write18{...}~, позволяющие запускать внешние программы из LaTeX-файла
+     (при конвертации в PDF), это считается небезопасным и поддрежка ~\write18~ в pdflatex и аналогах по умолчанию
+     отключена. Чтобы её включить надо передать pdflatex ключ -shell-escape. Единственный способ который я нашел
+     это полное переопределение переменной org-latex-pdf-process, я просто взял значение по умолчанию и добавил
+     везде ключ -shell-escape.
+
+     В документации к ~org-latex-listings~ указано, что при использовании метода ~minted~, LaTeX-пакет ~minted~ надо
+     добавлять с опцией ~newfloat~
+
+     #+BEGIN_SRC emacs-lisp
+       (add-to-list 'org-latex-packages-alist '("newfloat" "minted"))
+     #+END_SRC
+
+     однако у меня так не заработало, при конвертации из LaTeX в PDF происходила ошибка, в файле журнала экпорта
+     была указана ошибка что пакет ~newfloat~ не найден. Всё заработало после того как я убрал опцию ~newfloat~.
+     Чем грозит удаление этой опции, мне пока не ясно.
+
+     По умолчанию ссылки в PDF-документе подсвечиваются синим цветом, мне так не нравится, я предпочитаю чёрный.
+     Кроме того, поддержка русского языка, а точнее unicode кодировки, в LaTex-пакете ~hyperref~, который используется
+     для создания гиперссылок и содержания PDF-документа, отключена по умолчанию. Её можно включить, правильно настроив
+     генерируемый LaTeX-заголовок, для этого он должне содержать инструкцию ~\usepackage[unicode]{hyperref}~, однако
+     инструкция ~\usepackage[]{hyperref}~ (без опции ~unicode~) включается в заголовок генерируемого LaTeX-файла
+     по умолчанию. Она входит в список пакетов по умолчанию в переменой ~org-latex-default-packages-alist~, изменять
+     которую не рекомендуется. Другой способ настроить кодировку в LaTeX-пакете ~hyperref~ это использовать инструкцию
+     ~\hypersetup{...}~, шаблон которой, содержится в переменной ~org-latex-hyperref-template~, вот её мы и используем
+     для настройки кодировки и цвета ссылок.
+
+     #+BEGIN_SRC emacs-lisp
+       (setq-default org-latex-hyperref-template "\\hypersetup{\n unicode=true,\n pdfauthor={%a},\n pdftitle={%t},\n pdfkeywords={%k},\n pdfsubject={%d},\n pdfcreator={%c}, \n pdflang={%L}, \n colorlinks, \n citecolor=blank, \n filecolor=black, \n linkcolor=black, \n urlcolor=black\n}\n")
+     #+END_SRC
+
+** Cider
+
+   - Подключаем Cider и указываем ему скрывать служебные буферы с списке буферов emacs (так просто чтоб не засорять
+     список)
+
+     #+BEGIN_SRC emacs-lisp
+       (require 'cider)
+       (setq-default nrepl-hide-special-buffers t)
+     #+END_SRC
+
+** Leiningen
+
+   Для правильной работы Cider необходимо указать Leiningen загружать cider nrepl middleware при создании REPL.
+   Для этого необходимо соответствующим образом настроить профиль repl. Открываем или создаём ~/.lein/profiles.clj
+   и добавляем в него следующие настройки:
+
+   #+BEGIN_SRC clojure
+     {:repl {:dependencies [[org.clojure/tools.nrepl "0.2.12"]]
+             :plugins [[cider/cider-nrepl "0.10.0"]]}}
+   #+END_SRC
+
+   Разумеется, версии tools.nrepl и cider/cider-nrepl могут меняться со временем. Не уверен что tools.nrepl нужен.
+
+   thi-ng/babel
+
+* Дополнительные нюансы
+
+  При составлении данного документа я наткнулся на ошибки экспорта, несмотря на все эти настройки конвертация в PDF
+  завершалась ошибкой. Причина была в том что мой текст содержит LaTeX-инструкции, которые в нём даны просто
+  для описания, а не для исполнения. Такие инструкции должны быть вставлены в текст PDF-документа как есть,
+  без интерпритации. Есть по крайней мере 3 способа как это сделать:
+
+  - Выделять такие инструкции символами ~ или =, например =~\some-tex-instruction~=
+  - Использовать org-mode опции для emacs-буфера: ~OPTIONS: tex:verbatim~
+  - Установить в ~/.emacs~ переменную: ~(setq-default org-export-with-latex "verbatim")}~
