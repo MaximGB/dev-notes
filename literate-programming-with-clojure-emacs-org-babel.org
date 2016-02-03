@@ -14,7 +14,9 @@
  - [[Дополнительные настройки][Дополнительные настройки]]
    - [[Поддержка диаграм и изображений][Поддержка диаграм и изображений]]
  - [[Литературный проект][Литературный проект]]
- - [[Дополнительные нюансы][Дополнительные нюансы]]
+   - [[Shell-скрипт экспорта кода (tangling script)][Shell-скрипт экспорта кода (tangling script)]]
+   - [[Файловая структура проектa][Файловая структура проектa]]
+ - [[Нюансы][Нюансы]]
 
 * Совместимые версии org-mode, cider/lein nrepl middleware
 
@@ -108,7 +110,7 @@
 
      Также выходной LaTeX-файл должен включать пакет cmap и babel (с опциями english,russian). Мы настраиваем
      список org-latex-packages-alist, который используется для указания пакетов включаемых в каждый LaTeX
-     файл. Формат элемента списка ("options" "package" SNIPPET-FLAG), флаг нужен чтобы указать что пакет
+     файл. Формат элемента списка (\quot{}options\quot{} \quot{}package\quot{} SNIPPET-FLAG), флаг нужен чтобы указать что пакет
      также необходим для преобразования LaTeX-фрагментов (snippet) в изображения для включения в не LaTeX-файлы,
      в web-страницы, например. Я не очень понимаю какие LaTeX-пакеты для этого нужны, поэтому всегда указываю ~t~.
 
@@ -218,11 +220,13 @@
      +----------+         +----------+
    #+END_SRC
 
+   #+ATTR_LATEX: :float nil :width 8cm
    #+RESULTS:
    [[file:export/ditaa-example.png]]
 
    \noindent
    Для того чтобы включить поддержку ditaa в org необходимо:
+
    - установить emacs-пакет =org-plus-contrib= вместо =org=
    - не понятно почему, но после установки =org-plus-contrib= всё равно не хватает дирректории =scripts=, поэтому
      дополнительно надо будет склонировать репозиторий =org=
@@ -247,6 +251,13 @@
      После вставленных изображений часто надо добавлять LaTeX-инструкцию ~\noindent~ иначе в тексте после изображения
      сбивается отступ от края страницы.
 
+     Ширину вставляемого изображения, способ плавающего позицианирования и выравнивание можно настраивать с помощью
+     LaTeX-атрибутов, поддерживаемых в =org=:
+     #+BEGIN_EXAMPLE
+       #+ATTR_LATEX: :float t :width 0.38\textwidth :placement {r}{0.4\textwidth}
+     #+END_EXAMPLE
+     подробнее можно почитать по ссылке [[http://orgmode.org/manual/LaTeX-specific-attributes.html][LaTeX-specific-attributes]].
+
      Более подробно о подержке работы с изображениями в org-файлах можно почитать в [[http://doc.norang.ca/org-mode.html#OrgBabel]].
 
 * Литературный проект
@@ -256,10 +267,76 @@
   и содержание проекта, пригодного для компиляции с помощью =lein=. По-русски этот процесс, я думаю, следует просто
   называть экспортом кода, так как дословный перевод '*to tangle*' - /запутывать, усложнять/, как-то не очень подходит ;)
 
+  Из org-файлов генерируется проект целиком, включая project.clj.
 
-   thi-ng/babel
+** Shell-скрипт экспорта кода (tangling script)
 
-* Дополнительные нюансы
+   Данный shell-скрипт я взял из проекта [[https://github.com/thi-ng/babel][thi-ng/babel]], в принципе, это готовый =lein=-шаблон, формирующий полноценный
+   литературный проект на Clojure.
+
+   Сам скрипт выглядит вот так:
+
+   #+NAME: tangle.sh
+   #+BEGIN_SRC sh
+     #!/bin/sh
+
+     DIR=`pwd`
+     FILES=""
+
+     for i in $@; do
+         FILES="$FILES \"$i\""
+     done
+
+     emacs -Q --batch \
+         --eval \
+         "(progn
+             (require 'org)(require 'ob)(require 'ob-tangle)(require 'ob-lob)
+             (org-babel-lob-ingest \"src/libraryofbabel.org\")
+             (setq org-confirm-evaluate nil)
+             (mapc (lambda (file)
+                      (find-file (expand-file-name \"$DIR\"))
+                      (org-babel-tangle)
+                      (kill-buffer)) '($FILES)))" \
+     #2>&1 | grep Tangled
+   #+END_SRC
+
+   Как видно из кода этот shell-скрипт получает набор имён файлов из которых надо экспортировать код, и запускает
+   =emacs= в пакетном режиме для исполнения небольшой программы, суть которой загрузить окружение для поддержки
+   процесса экспорта, а затем по-одному экспортировать код из каждого файла в списке.
+
+   Для работы с этим shell-скрипом в проекте [[https://github.com/thi-ng/babel][thi-ng/babel]] есть вспомогательный shell-скрипт =tangle-all.sh=, который
+   просто передаёт в =tangle.sh= все org-файлы проекта:
+
+   #+NAME: tangle-all.sh
+   #+BEGIN_SRC sh
+     #!/bin/sh
+     ./tangle.sh README.org src/*.org test/*.org
+   #+END_SRC
+
+** Файловая структура проектa
+
+   Как видно, подразумевается что полноценный литературный проект имеет следущую файловую структуру:
+
+   #+BEGIN_SRC ditaa :file export/org-literate-project-base-structure.png
+     +-src
+     |  |
+     |  +-.org
+     |
+     +-test
+     |  |
+     |  +-.org
+     |
+     +-README.org
+   #+END_SRC
+
+   #+ATTR_LATEX: :float nil :width 0.33\textwidth :placement {c}{0.33\textwidth}
+   #+RESULTS:
+   [[file:export/org-literate-project-base-structure.png]]
+
+   Использование README.org очевидно имеет смысл для GitHub, я бы ещё добавил файл =project.org= который бы экспортировал
+   код для =project.clj=
+
+* Нюансы
 
   При составлении данного документа я наткнулся на ошибки экспорта, несмотря на все эти настройки конвертация в PDF
   завершалась ошибкой. Причина была в том что мой текст содержит LaTeX-инструкции, которые в нём даны просто
